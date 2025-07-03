@@ -54,6 +54,7 @@ defmodule CsvSniffer do
   For performance reasons, the data is evaluated in chunks, so it can try and evaluate the
   smallest portion of the data possible, evaluating additional chunks as necessary.
   """
+  @spec guess_delimiter(Dialect.t(), binary) :: Dialect.t()
   def guess_delimiter(%Dialect{delimiter: nil} = dialect, sample) do
     # inside this function, we can be sure there's no escape character ...
     newline = find_newline_character(sample)
@@ -77,7 +78,7 @@ defmodule CsvSniffer do
           updated_frequency_tables
           |> get_mode_of_the_frequencies()
           |> build_a_list_of_possible_delimiters(new_total)
-          |> Enum.filter(fn {k, _v} -> Enum.member?(@delimiters, k) end)
+          |> Enum.filter(fn {k, _} -> Enum.member?(@delimiters, k) end)
           |> Enum.into(%{})
 
         cont_or_halt = if possible_delimiters == %{}, do: :cont, else: :halt
@@ -95,9 +96,8 @@ defmodule CsvSniffer do
     %Dialect{dialect | delimiter: delimiter}
   end
 
-  def guess_delimiter(dialect, _sample) do
-    dialect
-  end
+  @spec guess_delimiter(Dialect.t(), binary) :: Dialect.t()
+  def guess_delimiter(dialect, _), do: dialect
 
   @doc """
   Looks for text enclosed between two identical quotes (the probable quotechar) which are
@@ -107,7 +107,7 @@ defmodule CsvSniffer do
   The quote with the most wins, same with the delimiter.  If there is no quotechar the delimiter
   can't be determined this way.
   """
-  @spec guess_quote(binary) :: CsvSniffer.Dialect.t()
+  @spec guess_quote(binary) :: Dialect.t()
   def guess_quote(sample) do
     sample
     |> run_quote_regex()
@@ -119,7 +119,8 @@ defmodule CsvSniffer do
     |> check_quoted_values(sample)
   end
 
-  def quote_regex do
+  @spec quote_regex() :: [Regex.t()]
+  defp quote_regex do
     [
       # ,".*?",
       ~r'(?P<delim>#{@delimiters_regex})(?P<quote>["\']).*?(?P=quote)(?P=delim)'sm,
@@ -227,7 +228,7 @@ defmodule CsvSniffer do
          %Dialect{delimiter: delimiter, quote_character: quote_character} = dialect,
          sample
        )
-       when not is_nil(delimiter) and not is_nil(quote_character) do
+       when is_binary(delimiter) and is_binary(quote_character) do
     escaped_delimiter = Regex.escape(delimiter)
     escaped_quote_character = Regex.escape(quote_character)
 
@@ -247,11 +248,11 @@ defmodule CsvSniffer do
     end
   end
 
-  defp check_double_quote(dialect, _sample), do: dialect
+  defp check_double_quote(dialect, _), do: dialect
 
-  defp check_quoted_delimiter(%{quote_needed: true} = dialect, _sample), do: dialect
+  defp check_quoted_delimiter(%{quote_needed: true} = dialect, _), do: dialect
 
-  defp check_quoted_delimiter(%{quote_character: qc, delimiter: dl} = dialect, _sample)
+  defp check_quoted_delimiter(%{quote_character: qc, delimiter: dl} = dialect, _)
        when is_nil(qc) or is_nil(dl) do
     dialect
   end
@@ -280,9 +281,9 @@ defmodule CsvSniffer do
     end
   end
 
-  defp check_quoted_carriage_return(%{quote_needed: true} = dialect, _sample), do: dialect
+  defp check_quoted_carriage_return(%{quote_needed: true} = dialect, _), do: dialect
 
-  defp check_quoted_carriage_return(%{quote_character: qc, delimiter: dl} = dialect, _sample)
+  defp check_quoted_carriage_return(%{quote_character: qc, delimiter: dl} = dialect, _)
        when is_nil(qc) or is_nil(dl) do
     dialect
   end
@@ -359,7 +360,7 @@ defmodule CsvSniffer do
 
   defp get_mode_of_the_frequencies(frequency_tables) do
     Enum.reduce(frequency_tables, %{}, fn
-      {_character, %{0 => _} = items}, acc when map_size(items) == 1 ->
+      {_, %{0 => _} = items}, acc when map_size(items) == 1 ->
         acc
 
       # Limit to 7-bit ASCII characters
@@ -373,7 +374,7 @@ defmodule CsvSniffer do
 
         Map.put(acc, <<character>>, adjusted_mode)
 
-      _character_and_frequencies, acc ->
+      _, acc ->
         acc
     end)
   end
@@ -387,7 +388,7 @@ defmodule CsvSniffer do
         when frequency > 0 and meta_frequency > 0 and meta_frequency / total >= consistency ->
           Map.put(acc, delimiter, value)
 
-        _delimiter_and_frequency, acc ->
+        _, acc ->
           acc
       end)
 
@@ -407,7 +408,7 @@ defmodule CsvSniffer do
   defp pick_delimiter(possible_delimiters) when map_size(possible_delimiters) > 1,
     do: max_by_value(possible_delimiters)
 
-  defp pick_delimiter(_possible_delimiters), do: nil
+  defp pick_delimiter(_), do: nil
 
   defp format_response(%{delimiter: nil}), do: {:error, "Could not determine delimiter"}
 
