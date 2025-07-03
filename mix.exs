@@ -2,7 +2,7 @@ defmodule CsvSniffer.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/doofinder/csv_sniffer"
-  @version "0.3"
+  @version "0.3.0"
 
   def project do
     [
