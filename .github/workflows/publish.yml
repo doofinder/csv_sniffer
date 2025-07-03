@@ -1,0 +1,70 @@
+name: Publish or Update doc
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_action:
+        required: true
+        type: choice
+        options:
+          - publish
+          - update_doc
+
+  pull_request:
+    types:
+      - closed
+    branches:
+      - master
+
+jobs:
+  publish:
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      HEX_API_KEY: ${{ secrets.HEX_KEY }}
+      GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+      MIX_ENV: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: asdf-vm/actions/setup@v3
+
+      - name: asdf cache
+        id: asdf-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.asdf/
+          key: ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-asdf-files
+
+      - name: Retrieve Mix Dependencies Cache
+        uses: actions/cache@v4
+        id: mix-cache #id to use in retrieve action
+        with:
+          path: deps
+          key: ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+
+      # see https://github.com/actions/cache/tree/main#known-practices-and-workarounds
+      - name: Retrieve & update dev compiled cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: _build/dev
+          key: ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-dev-cache-${{ github.run_id}}
+          restore-keys: |
+            ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-dev-cache
+
+      - name: Publish the package
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_action == 'publish'
+        run: |
+          HEX_API_KEY=$HEX_API_KEY mix hex.publish --yes
+
+      - name: Install Mix Dependencies
+        if: steps.mix-cache.outputs.cache-hit != 'true'
+        run: |
+          mix local.rebar --force
+          mix local.hex --force
+          mix hex.organization auth doofinder --key $HEX_API_KEY
+          mix deps.get
+
+      - name: Update docs in published package
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_action == 'update_doc'
+        run: |
+          HEX_API_KEY=$HEX_API_KEY mix hex.publish docs --yes
