@@ -233,7 +233,9 @@ defmodule CsvSniffer do
     double_quote_regex =
       Regex.compile!(
         "((#{escaped_delimiter})|^)#{escaped_quote_character}" <>
-          "([^#{escaped_quote_character}]*#{escaped_quote_character}{2})+[^#{escaped_quote_character}]*" <>
+          "([^#{escaped_quote_character}]*#{escaped_quote_character}{2})+[^#{
+            escaped_quote_character
+          }]*" <>
           "#{escaped_quote_character}((#{escaped_delimiter})|$)",
         "m"
       )
@@ -266,7 +268,9 @@ defmodule CsvSniffer do
     quoted_delimiter_regex =
       Regex.compile!(
         "((#{escaped_delimiter})|^)#{escaped_quote_character}" <>
-          "([^#{escaped_delimiter}#{escaped_quote_character}]*#{escaped_delimiter})+[^#{escaped_delimiter}#{escaped_quote_character}]*" <>
+          "([^#{escaped_delimiter}#{escaped_quote_character}]*#{escaped_delimiter})+[^#{
+            escaped_delimiter
+          }#{escaped_quote_character}]*" <>
           "#{escaped_quote_character}((#{escaped_delimiter})|$)",
         "m"
       )
