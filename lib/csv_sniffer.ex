@@ -54,6 +54,7 @@ defmodule CsvSniffer do
   For performance reasons, the data is evaluated in chunks, so it can try and evaluate the
   smallest portion of the data possible, evaluating additional chunks as necessary.
   """
+  @spec guess_delimiter(Dialect.t(), String.t()) :: Dialect.t()
   def guess_delimiter(%Dialect{delimiter: nil} = dialect, sample) do
     # inside this function, we can be sure there's no escape character ...
     newline = find_newline_character(sample)
@@ -138,12 +139,12 @@ defmodule CsvSniffer do
            [_ | _] = matches <- Enum.filter(matches, &header_compatible?({names, &1}, sample)) do
         {names, matches}
       else
-        _ -> false
+        _any -> false
       end
     end)
   end
 
-  defp header_compatible?({["quote"], _}, _), do: true
+  defp header_compatible?({["quote"], _delimiters}, _sample), do: true
 
   defp header_compatible?({["delim", "quote"], [delim_char, quote_char]}, sample) do
     quote_regex = ~r/^[^\n#{quote_char}]*#{quote_char}/
@@ -164,7 +165,7 @@ defmodule CsvSniffer do
   defp header_compatible?({["quote", "delim"], [q, d]}, sample),
     do: header_compatible?({["delim", "quote"], [d, q]}, sample)
 
-  defp header_compatible?(_, _), do: false
+  defp header_compatible?({_names, _delimiters}, _sample), do: false
 
   defp get_best_delim_candidate(line) do
     {candidate, _} =
@@ -317,9 +318,9 @@ defmodule CsvSniffer do
   # quotes, but some field values are quoted-enclosed:
   # "some value","some other value","yep"
   # in that case, quote IS needed
-  defp check_quoted_values(%{quote_needed: true} = dialect, _), do: dialect
+  defp check_quoted_values(%{quote_needed: true} = dialect, _sample), do: dialect
   # we can count that NO quoted delimiter, and NO quoted newline are here
-  defp check_quoted_values(%{quote_character: qc, delimiter: dl} = dialect, _)
+  defp check_quoted_values(%{quote_character: qc, delimiter: dl} = dialect, _sample)
        when is_nil(qc) or is_nil(dl),
        do: dialect
 
