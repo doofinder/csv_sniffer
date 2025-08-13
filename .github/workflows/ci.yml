@@ -1,50 +1,60 @@
 name: CI
 
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   test:
-    runs-on: ubuntu-24.04
-
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
     env:
-      MIX_ENV: test
       HEX_KEY: ${{ secrets.HEX_KEY }}
-
-    strategy:
-      matrix:
-        elixir: [ 1.18.4 ]
-        otp: [ 27.3.4 ]
-
+      MIX_ENV: test
     steps:
       - uses: actions/checkout@v4
+      - uses: asdf-vm/actions/setup@v3
 
-      - name: Setup elixir
-        uses: erlef/setup-beam@v1
+      - name: asdf cache
+        id: asdf-cache
+        uses: actions/cache@v4
         with:
-          otp-version: ${{ matrix.otp }}
-          elixir-version: ${{ matrix.elixir }}
+          path: ~/.asdf/
+          key: ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-asdf-files
 
-      - name: Cache
-        uses: actions/cache@v3
-        id: cache 
+      - uses: asdf-vm/actions/install@v3
+
+      - name: Retrieve Mix Dependencies Cache
+        uses: actions/cache@v4
+        id: mix-cache #id to use in retrieve action
         with:
-          path: |
-            deps
-            _build
-            ~/.cache/rebar3
-          key: ${{ runner.os }}_${{ matrix.otp }}_${{ matrix.elixir }}_cache_${{ hashFiles('**/mix.lock') }}
+          path: deps
+          key: ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+
+      # see https://github.com/actions/cache/tree/main#known-practices-and-workarounds
+      - name: Retrieve & update test compiled cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: _build/test
+          key: ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-test-cache-${{ github.run_id}}
           restore-keys: |
-            ${{ runner.os }}_${{ matrix.otp }}_${{ matrix.elixir }}_cache_
+            ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-test-cache
+      # see https://github.com/actions/cache/tree/main#known-practices-and-workarounds
+      - name: Retrieve & update dev compiled cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: _build/dev
+          key: ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-dev-cache-${{ github.run_id}}
+          restore-keys: |
+            ${{ runner.os }}-${{ hashFiles('.tool-versions') }}-dev-cache
       - name: Install Mix Dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.mix-cache.outputs.cache-hit != 'true'
         run: |
           mix local.rebar --force
           mix local.hex --force
           mix hex.organization auth doofinder --key $HEX_KEY
           mix deps.get
-      - name: Compile dev
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: mix compile
+      - name: Compile dependencies
+        run: mix deps.compile
         env:
           MIX_ENV: dev
 
@@ -53,19 +63,11 @@ jobs:
         env:
           MIX_ENV: dev
 
-      - name: Compile test
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: mix compile
-        env:
-          MIX_ENV: test
-
       - name: Check Formatting
         run: mix format --check-formatted
 
       - name: Run credo
         run: mix credo --strict --ignore todo
-        env:
-          MIX_ENV: dev
 
       - name: Run Tests
         run: mix test
@@ -74,3 +76,9 @@ jobs:
         run: mix dialyzer
         env:
           MIX_ENV: dev
+
+      - name: Run Sobelow
+        run: mix sobelow --compact --exit $SEVERITY
+        env:
+          MIX_ENV: dev
+          SEVERITY: 0 # Possible values: high, medium, low, 0 (with 0, it doesn't exit on any finding encountered)
