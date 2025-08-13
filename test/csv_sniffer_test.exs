@@ -134,7 +134,8 @@ defmodule CsvSnifferTest do
     end
 
     test "on sample3 without specifying delimiter" do
-      {:error, "Could not determine delimiter"} = CsvSniffer.sniff(@sample3)
+      {:ok, %CsvSniffer.Dialect{delimiter: ";", quote_character: nil, quote_needed: false}} =
+        CsvSniffer.sniff(@sample3)
     end
 
     test "on sample4" do
