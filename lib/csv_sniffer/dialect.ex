@@ -7,8 +7,8 @@ defmodule CsvSniffer.Dialect do
   @typedoc "Describes a CSV dialect."
   @typedoc since: "0.1.0"
   @type t :: %__MODULE__{
-          delimiter: String.t(),
-          quote_character: String.t(),
+          delimiter: String.t() | nil,
+          quote_character: String.t() | nil,
           quote_needed: boolean()
         }
 
